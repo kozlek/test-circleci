@@ -1,0 +1,51 @@
+version: 2.1
+
+# Probe: what a CircleCI job can read about the pull request it builds.
+# CircleCI fills each << pipeline.* >> value in when it compiles this config;
+# where a value does not apply to the pipeline, the job sees `<nil>`.
+
+jobs:
+  probe:
+    docker:
+      - image: cimg/base:stable
+    resource_class: small
+    environment:
+      PIPELINE_NUMBER: << pipeline.number >>
+      PIPELINE_TRIGGER_SOURCE: << pipeline.trigger_source >>
+      PIPELINE_GIT_BRANCH: << pipeline.git.branch >>
+      PIPELINE_GIT_BRANCH_IS_DEFAULT: << pipeline.git.branch.is_default >>
+      PIPELINE_GIT_REVISION: << pipeline.git.revision >>
+      # GitHub App pipelines only, and the pull request ones on pull request
+      # events only.
+      PIPELINE_EVENT_NAME: << pipeline.event.name >>
+      PIPELINE_EVENT_ACTION: << pipeline.event.action >>
+      PIPELINE_PR_NUMBER: << pipeline.event.github.pull_request.number >>
+      PIPELINE_PR_BASE_REF: << pipeline.event.github.pull_request.base.ref >>
+      PIPELINE_PR_HEAD_REF: << pipeline.event.github.pull_request.head.ref >>
+      PIPELINE_PR_HEAD_SHA: << pipeline.event.github.pull_request.head.sha >>
+    steps:
+      - run:
+          name: Job started
+          command: date -u +%Y-%m-%dT%H:%M:%S.%3NZ
+      - checkout
+      - run:
+          name: What the job can read
+          # An explicit list: the repository is public, and the environment
+          # also holds CircleCI's OIDC tokens.
+          command: |
+            for name in CIRCLE_BRANCH CIRCLE_SHA1 CIRCLE_TAG \
+                CIRCLE_PULL_REQUEST CIRCLE_PULL_REQUESTS CIRCLE_PR_NUMBER \
+                CIRCLE_PR_REPONAME CIRCLE_PR_USERNAME CIRCLE_REPOSITORY_URL \
+                CIRCLE_PROJECT_USERNAME CIRCLE_PROJECT_REPONAME \
+                CIRCLE_WORKFLOW_ID CIRCLE_JOB CIRCLE_BUILD_NUM CIRCLE_USERNAME \
+                $(compgen -v PIPELINE_); do
+              printf '%s=[%s]\n' "$name" "${!name-<unset>}"
+            done
+            echo "HEAD=$(git rev-parse HEAD)"
+            echo "HEAD parents=$(git log -1 --format=%P)"
+            echo "origin/HEAD=$(git symbolic-ref -q refs/remotes/origin/HEAD || echo '<unset>')"
+
+workflows:
+  probe:
+    jobs:
+      - probe
